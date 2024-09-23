@@ -1269,7 +1269,7 @@ export default class PDFDocument {
       useObjectStreams = true,
       addDefaultPage = true,
       objectsPerTick = 50,
-      updateFieldAppearances = true,
+      updateFieldAppearances = true
     } = options;
 
     assertIs(useObjectStreams, 'useObjectStreams', ['boolean']);
@@ -1288,6 +1288,32 @@ export default class PDFDocument {
 
     const Writer = useObjectStreams ? PDFStreamWriter : PDFWriter;
     return Writer.forContext(this.context, objectsPerTick).serializeToBuffer();
+  }
+
+  async saveToStream(writer: WritableStreamDefaultWriter, options: SaveOptions = {}){
+    const {
+      useObjectStreams = true,
+      addDefaultPage = true,
+      objectsPerTick = 50,
+      updateFieldAppearances = true
+    } = options;
+
+    assertIs(useObjectStreams, 'useObjectStreams', ['boolean']);
+    assertIs(addDefaultPage, 'addDefaultPage', ['boolean']);
+    assertIs(objectsPerTick, 'objectsPerTick', ['number']);
+    assertIs(updateFieldAppearances, 'updateFieldAppearances', ['boolean']);
+
+    if (addDefaultPage && this.getPageCount() === 0) this.addPage();
+
+    if (updateFieldAppearances) {
+      const form = this.formCache.getValue();
+      if (form) form.updateFieldAppearances();
+    }
+
+    await this.flush();
+
+    const Writer = useObjectStreams ? PDFStreamWriter : PDFWriter;
+    await Writer.forContext(this.context, objectsPerTick).serializeToStream(writer);
   }
 
   /**

@@ -8,6 +8,7 @@ import PDFRef from 'src/core/objects/PDFRef';
 import PDFContext from 'src/core/PDFContext';
 import PDFObjectStream from 'src/core/structures/PDFObjectStream';
 import CharCodes from 'src/core/syntax/CharCodes';
+
 import { copyStringIntoBuffer, waitForTick } from 'src/utils';
 
 export interface SerializationInfo {
@@ -97,6 +98,67 @@ class PDFWriter {
     offset += trailer.copyBytesInto(buffer, offset);
 
     return buffer;
+  }
+
+  async serializeToStream(writer: WritableStreamDefaultWriter) {
+    const {
+      header,
+      indirectObjects,
+      xref,
+      trailerDict,
+      trailer,
+    } = await this.computeBufferSize();
+
+    let buffer = new Uint8Array(header.sizeInBytes());
+
+    header.copyBytesInto(buffer, 0);
+    writer.write(buffer);
+    writer.write('\n\n');
+
+    for (let idx = 0, len = indirectObjects.length; idx < len; idx++) {
+      const [ref, object] = indirectObjects[idx];
+
+      const objectNumber = String(ref.objectNumber);
+      //offset += copyStringIntoBuffer(objectNumber, buffer, offset);
+      writer.write(objectNumber);
+      writer.write(' ');
+
+      const generationNumber = String(ref.generationNumber);
+      //offset += copyStringIntoBuffer(generationNumber, buffer, offset);
+      writer.write(generationNumber);
+      //writer.write([CharCodes.Space, CharCodes.o, CharCodes.b, CharCodes.j, CharCodes.Newline]);
+      writer.write(` obj\n`);
+
+      buffer = new Uint8Array(object.sizeInBytes());
+      object.copyBytesInto(buffer, 0);
+      writer.write(buffer);
+
+      //writer.write([CharCodes.Newline, CharCodes.e, CharCodes.n, CharCodes.d, CharCodes.o, CharCodes.b, CharCodes.j, CharCodes.Newline, CharCodes.Newline]);
+      writer.write(`\nendobj\n\n`);
+
+      const n =
+        object instanceof PDFObjectStream ? object.getObjectsCount() : 1;
+      if (this.shouldWaitForTick(n)) await waitForTick();
+    }
+
+    if (xref) {
+      buffer = new Uint8Array(xref.sizeInBytes());
+      xref.copyBytesInto(buffer, 0);
+      writer.write(buffer);
+      writer.write(`\n`);
+    }
+
+    if (trailerDict) {
+      buffer = new Uint8Array(trailerDict.sizeInBytes());
+      trailerDict.copyBytesInto(buffer, 0);
+      writer.write(buffer);
+      writer.write(`\n\n`);
+    }
+
+    buffer = new Uint8Array(trailer.sizeInBytes());
+    trailer.copyBytesInto(buffer, 0);
+    writer.write(buffer);
+
   }
 
   protected computeIndirectObjectSize([ref, object]: [
